@@ -1,8 +1,10 @@
 use nanoserde::{DeJson, SerJson};
 use std::collections;
+use std::io::ErrorKind;
 use std::net;
 use std::sync;
 use std::thread;
+use std::time;
 
 #[derive(DeJson, SerJson, Clone, PartialEq, Eq)]
 enum NetworkMessage {
@@ -30,6 +32,7 @@ fn main() {
 		let Ok(stream) = stream else {
 			continue;
 		};
+		stream.set_read_timeout(Some(time::Duration::from_nanos(100))).unwrap();
 		let Ok(websocket) = tungstenite::accept(stream) else {
 			continue;
 		};
@@ -62,30 +65,39 @@ fn orchestrator(receiver: Receiver) {
 }
 
 fn client_handler(mut websocket: Websocket, sender: Sender) {
+	println!("cliente connectado");
 	let receiver = {
 		let (s, receiver) = sync::mpsc::channel::<InternalMessage>();
-		let _ = sender.send(InternalMessage::Register(s));
+		sender.send(InternalMessage::Register(s)).unwrap();
 		receiver
 	};
 
 	loop {
 		let msg = match websocket.read() {
-			Ok(tungstenite::Message::Text(msg)) => msg,
+			Ok(tungstenite::Message::Text(msg)) => Some(msg),
 			Err(tungstenite::Error::AlreadyClosed | tungstenite::Error::ConnectionClosed) => break,
-			_ => continue,
-		};
-
-		match NetworkMessage::deserialize_json(&msg) {
-			Ok(NetworkMessage::SendMessage { id, channel, content }) => {
-				println!("id: {id} ,channel: {channel} ,content: {content}");
-				sender.send(InternalMessage::SendMessage { id, channel, content }).unwrap()
+			Err(tungstenite::Error::Io(err)) => {
+				let err = err.kind();
+				if !matches!(err, ErrorKind::WouldBlock) {
+					log::error!("{err}");
+				}
+				None
 			}
-			Err(e) => {
-				log::info!("{e}");
-				continue;
-			}
-			_ => {}
+			_ => None,
 		};
+		if let Some(msg) = msg {
+			match NetworkMessage::deserialize_json(&msg) {
+				Ok(NetworkMessage::SendMessage { id, channel, content }) => {
+					println!("id: {id} ,channel: {channel} ,content: {content}");
+					sender.send(InternalMessage::SendMessage { id, channel, content }).unwrap()
+				}
+				Err(e) => {
+					log::info!("{e}");
+					continue;
+				}
+				_ => {}
+			};
+		}
 		match receiver.recv() {
 			Ok(InternalMessage::SendMessage { id, channel, content }) => {
 				let msg = NetworkMessage::SendMessage { id, channel, content }.serialize_json();
