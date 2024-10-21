@@ -11,10 +11,15 @@ fn main() {
 			continue;
 		};
 		thread::spawn(move || loop {
-			let msg = websocket.read().unwrap();
-			if msg.is_binary() || msg.is_text() {
-				websocket.send(msg).unwrap();
-			}
+			let msg = match websocket.read() {
+				Ok(tungstenite::Message::Text(msg)) => msg,
+				Err(tungstenite::Error::AlreadyClosed | tungstenite::Error::ConnectionClosed) => break,
+				_ => continue,
+			};
+
+			println!("msg: {msg}");
+
+			websocket.send(tungstenite::Message::Text(msg)).unwrap();
 		});
 	}
 }
