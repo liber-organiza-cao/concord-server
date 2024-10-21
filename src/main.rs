@@ -20,6 +20,7 @@ pub enum NetworkMessage {
 pub enum InternalMessage {
 	Register(Sender),
 	Registered { id: u32 },
+	Unregister { id: u32 },
 	SendMessage { id: u32, channel: String, content: String },
 }
 

@@ -18,6 +18,9 @@ pub fn handler(receiver: Receiver) {
 				};
 				sender.send(InternalMessage::SendMessage { id, channel, content }).unwrap();
 			}
+			InternalMessage::Unregister { id } => {
+				clients.remove(&id);
+			}
 			_ => {}
 		}
 	}
