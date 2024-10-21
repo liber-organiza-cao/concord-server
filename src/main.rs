@@ -19,9 +19,18 @@ pub enum NetworkMessage {
 #[derive(Debug, Clone)]
 pub enum InternalMessage {
 	Register(Sender),
-	Registered { id: u32 },
-	Unregister { id: u32 },
-	SendMessage { id: u32, channel: String, content: String },
+	Registered {
+		id: u32,
+	},
+	Unregister {
+		id: u32,
+	},
+	SendMessage {
+		sender_id: u32,
+		receiver_id: u32,
+		channel: String,
+		content: String,
+	},
 }
 
 pub type Websocket = tungstenite::WebSocket<net::TcpStream>;

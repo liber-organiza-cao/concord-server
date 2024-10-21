@@ -11,12 +11,24 @@ pub fn handler(receiver: Receiver) {
 				clients.insert(next_id, sender);
 				next_id += 1;
 			}
-			InternalMessage::SendMessage { id, channel, content } => {
-				let Some(sender) = clients.get(&id) else {
-					log::info!("Client: {id} not exists");
+			InternalMessage::SendMessage {
+				sender_id,
+				receiver_id,
+				channel,
+				content,
+			} => {
+				let Some(sender) = clients.get(&receiver_id) else {
+					log::info!("Client: {receiver_id} not exists");
 					continue;
 				};
-				sender.send(InternalMessage::SendMessage { id, channel, content }).unwrap();
+				sender
+					.send(InternalMessage::SendMessage {
+						sender_id,
+						receiver_id,
+						channel,
+						content,
+					})
+					.unwrap();
 			}
 			InternalMessage::Unregister { id } => {
 				clients.remove(&id);
