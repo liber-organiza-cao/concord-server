@@ -25,7 +25,7 @@ pub fn handler(mut websocket: Websocket, sender: Sender) {
 			match NetworkMessage::deserialize_json(&msg) {
 				Ok(NetworkMessage::SendMessage { id, channel, content }) => {
 					log::info!("id: {id} ,channel: {channel} ,content: {content}");
-					sender.send(InternalMessage::SendMessage { id, channel, content }).unwrap()
+					let _ = sender.send(InternalMessage::SendMessage { id, channel, content });
 				}
 				Err(e) => {
 					log::info!("{e}");
@@ -36,7 +36,7 @@ pub fn handler(mut websocket: Websocket, sender: Sender) {
 		}
 		match receiver.recv_timeout(TIMEOUT) {
 			Ok(InternalMessage::SendMessage { id, channel, content }) => {
-				let msg = NetworkMessage::SendMessage { id, channel, content }.serialize_json();
+				let msg = NetworkMessage::ReceiveMessage { id, channel, content }.serialize_json();
 				let _ = websocket.send(tungstenite::Message::text(msg));
 			}
 			Ok(InternalMessage::Registered { id }) => {
