@@ -27,6 +27,8 @@ pub type Websocket = tungstenite::WebSocket<net::TcpStream>;
 pub type Receiver = sync::mpsc::Receiver<InternalMessage>;
 pub type Sender = sync::mpsc::Sender<InternalMessage>;
 
+const TIMEOUT: time::Duration = time::Duration::from_millis(100);
+
 fn main() {
 	#[cfg(not(debug_assertions))]
 	simple_logger::init_with_level(log::Level::Info).unwrap();
@@ -39,7 +41,7 @@ fn main() {
 		let Ok(stream) = stream else {
 			continue;
 		};
-		stream.set_read_timeout(Some(time::Duration::from_nanos(100))).unwrap();
+		stream.set_read_timeout(Some(TIMEOUT)).unwrap();
 		let Ok(websocket) = tungstenite::accept(stream) else {
 			continue;
 		};

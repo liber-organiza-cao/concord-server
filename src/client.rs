@@ -34,7 +34,7 @@ pub fn handler(mut websocket: Websocket, sender: Sender) {
 				_ => {}
 			};
 		}
-		match receiver.recv() {
+		match receiver.recv_timeout(TIMEOUT) {
 			Ok(InternalMessage::SendMessage { id, channel, content }) => {
 				let msg = NetworkMessage::SendMessage { id, channel, content }.serialize_json();
 				let _ = websocket.send(tungstenite::Message::text(msg));
