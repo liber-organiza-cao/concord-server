@@ -1,5 +1,11 @@
+use nanoserde::{DeJson, SerJson};
 use std::net;
 use std::thread;
+
+#[derive(DeJson, SerJson, Clone, PartialEq, Eq)]
+enum Message {
+	SendMessage { channel: String, text: String },
+}
 
 fn main() {
 	let server = net::TcpListener::bind("0.0.0.0:6464").unwrap();
@@ -17,9 +23,17 @@ fn main() {
 				_ => continue,
 			};
 
-			println!("msg: {msg}");
+			match Message::deserialize_json(&msg) {
+				Ok(Message::SendMessage { channel, text }) => {
+					println!("channel: {channel}, text: {text}");
+				}
+				Err(e) => {
+					log::info!("{e}");
+					continue;
+				}
+			};
 
-			websocket.send(tungstenite::Message::Text(msg)).unwrap();
+			let _ = websocket.send(tungstenite::Message::Text(msg));
 		});
 	}
 }

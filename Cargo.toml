@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 tungstenite = "0.24.0"
+nanoserde = "0.1.37"
+log = "0.4.22"
