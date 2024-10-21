@@ -28,6 +28,10 @@ pub type Receiver = sync::mpsc::Receiver<InternalMessage>;
 pub type Sender = sync::mpsc::Sender<InternalMessage>;
 
 fn main() {
+	#[cfg(not(debug_assertions))]
+	simple_logger::init_with_level(log::Level::Info).unwrap();
+	#[cfg(debug_assertions)]
+	simple_logger::init_with_level(log::Level::Debug).unwrap();
 	let server = net::TcpListener::bind("0.0.0.0:6464").unwrap();
 	let (sender, receiver) = sync::mpsc::channel::<InternalMessage>();
 	thread::spawn(move || orchestrator::handler(receiver));
