@@ -8,7 +8,9 @@ pub fn handler(mut websocket: Websocket, sender: Sender) {
 		receiver
 	};
 
-	let mut my_id = None;
+	// connection id.
+	// TODO: this doesn't need to be an Option
+	let mut conn_id = None;
 
 	loop {
 		let msg = match websocket.read() {
@@ -25,17 +27,10 @@ pub fn handler(mut websocket: Websocket, sender: Sender) {
 		};
 		if let Some(msg) = msg {
 			match NetworkMessage::deserialize_json(&msg) {
-				Ok(NetworkMessage::SendMessage { id, channel, content }) => {
-					log::info!("id: {id} ,channel: {channel} ,content: {content}");
-					if let Some(sender_id) = my_id {
-						sender
-							.send(InternalMessage::SendMessage {
-								receiver_id: id,
-								sender_id,
-								channel,
-								content,
-							})
-							.unwrap();
+				Ok(NetworkMessage::SendMessage { channel, content }) => {
+					// log::info!("id: {id} ,channel: {channel} ,content: {content}");
+					if let Some(author) = conn_id {
+						sender.send(InternalMessage::SendMessage { author, channel, content }).unwrap();
 					}
 				}
 				Err(e) => {
@@ -47,25 +42,20 @@ pub fn handler(mut websocket: Websocket, sender: Sender) {
 		}
 		match receiver.recv_timeout(TIMEOUT) {
 			Ok(InternalMessage::SendMessage {
-				sender_id, channel, content, ..
+				author, channel, content, ..
 			}) => {
-				let msg = NetworkMessage::ReceiveMessage {
-					id: sender_id,
-					channel,
-					content,
-				}
-				.serialize_json();
+				let msg = NetworkMessage::ReceiveMessage { author, channel, content }.serialize_json();
 				let _ = websocket.send(tungstenite::Message::text(msg));
 			}
 			Ok(InternalMessage::Registered { id }) => {
-				my_id = Some(id);
+				conn_id = Some(id);
 				let msg = NetworkMessage::Registered { id }.serialize_json();
 				let _ = websocket.send(tungstenite::Message::text(msg));
 			}
 			_ => {}
 		}
 	}
-	if let Some(id) = my_id {
+	if let Some(id) = conn_id {
 		sender.send(InternalMessage::Unregister { id }).unwrap();
 	}
 }

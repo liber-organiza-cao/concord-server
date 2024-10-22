@@ -11,24 +11,17 @@ pub fn handler(receiver: Receiver) {
 				clients.insert(next_id, sender);
 				next_id += 1;
 			}
-			InternalMessage::SendMessage {
-				sender_id,
-				receiver_id,
-				channel,
-				content,
-			} => {
-				let Some(sender) = clients.get(&receiver_id) else {
-					log::info!("Client: {receiver_id} not exists");
-					continue;
-				};
-				sender
-					.send(InternalMessage::SendMessage {
-						sender_id,
-						receiver_id,
-						channel,
-						content,
-					})
-					.unwrap();
+			InternalMessage::SendMessage { author, channel, content } => {
+				// TODO: only send to clients on the same channel
+				for (_, client) in &clients {
+					client
+						.send(InternalMessage::SendMessage {
+							author,
+							channel: channel.clone(),
+							content: content.clone(),
+						})
+						.unwrap();
+				}
 			}
 			InternalMessage::Unregister { id } => {
 				clients.remove(&id);

@@ -11,26 +11,17 @@ mod orchestrator;
 
 #[derive(DeJson, SerJson, Clone, PartialEq, Eq)]
 pub enum NetworkMessage {
-	SendMessage { id: u32, channel: String, content: String },
-	ReceiveMessage { id: u32, channel: String, content: String },
+	SendMessage { channel: String, content: String },
+	ReceiveMessage { author: u32, channel: String, content: String },
 	Registered { id: u32 },
 }
 
 #[derive(Debug, Clone)]
 pub enum InternalMessage {
 	Register(Sender),
-	Registered {
-		id: u32,
-	},
-	Unregister {
-		id: u32,
-	},
-	SendMessage {
-		sender_id: u32,
-		receiver_id: u32,
-		channel: String,
-		content: String,
-	},
+	Registered { id: u32 },
+	Unregister { id: u32 },
+	SendMessage { author: u32, channel: String, content: String },
 }
 
 pub type Websocket = tungstenite::WebSocket<net::TcpStream>;
