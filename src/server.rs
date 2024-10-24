@@ -1,6 +1,8 @@
+use std::collections;
 use std::io;
 use std::marker;
 use std::net;
+use std::sync;
 use std::thread;
 use std::time;
 
@@ -23,6 +25,7 @@ pub struct Server<T: nanoserde::DeJson + nanoserde::SerJson, const TIMEOUT_IN_MI
 
 pub struct ConnectionHandler<T: nanoserde::DeJson + nanoserde::SerJson> {
 	sender: crossbeam_channel::Sender<InternalMessage<T>>,
+	clients: sync::Arc<sync::RwLock<collections::HashSet<u64>>>,
 	messages_queue: Vec<(u64, T)>,
 }
 
@@ -34,7 +37,7 @@ impl<T: nanoserde::DeJson + nanoserde::SerJson> ConnectionHandler<T> {
 		self.messages_queue.pop()
 	}
 	pub fn get_clients(&self) -> Vec<u64> {
-		Vec::new()
+		self.clients.read().unwrap().iter().map(|id| *id).collect()
 	}
 }
 
@@ -49,7 +52,9 @@ impl<T: nanoserde::DeJson + nanoserde::SerJson + std::marker::Send + 'static, co
 	pub fn run<F: Fn(&mut ConnectionHandler<T>) + std::marker::Sync>(self, handshake: &'static F) {
 		let timeout = time::Duration::from_millis(TIMEOUT_IN_MILLIS);
 		let (sender, receiver) = crossbeam_channel::bounded::<InternalMessage<T>>(0);
+		let clients = sync::Arc::new(sync::RwLock::new(collections::HashSet::<u64>::new()));
 		let mut id_counter = 0;
+
 		for stream in self.listener.incoming() {
 			let Ok(stream) = stream else {
 				continue;
@@ -59,46 +64,60 @@ impl<T: nanoserde::DeJson + nanoserde::SerJson + std::marker::Send + 'static, co
 				continue;
 			};
 
+			{
+				let mut clients = clients.write().unwrap();
+				clients.insert(id_counter);
+			}
+
 			let sender = sender.clone();
 			let receiver = receiver.clone();
+			let clients = clients.clone();
 			let id = id_counter;
 
 			let mut handler = ConnectionHandler {
 				sender,
+				clients,
 				messages_queue: Vec::new(),
 			};
 			id_counter += 1;
-			thread::spawn(move || loop {
-				match websocket.read() {
-					Ok(tungstenite::Message::Text(str)) => {
-						if let Ok(msg) = T::deserialize_json(&str) {
-							handler.messages_queue.push((id, msg));
-						}
-					}
-					Err(tungstenite::Error::AlreadyClosed | tungstenite::Error::ConnectionClosed) => break,
-					Err(tungstenite::Error::Io(err)) => {
-						let err = err.kind();
-						if !matches!(err, io::ErrorKind::WouldBlock) {
-							log::error!("{err}");
-						}
-					}
-					_ => {}
-				};
 
-				match receiver.recv_timeout(timeout) {
-					Ok(InternalMessage::SendMessage { receiver_id, message }) => {
-						if receiver_id == id {
-							let message = message.serialize_json();
-							if let Err(e) = websocket.send(tungstenite::Message::text(message)) {
-								log::error!("{e}");
+			thread::spawn(move || {
+				loop {
+					match websocket.read() {
+						Ok(tungstenite::Message::Text(str)) => {
+							if let Ok(msg) = T::deserialize_json(&str) {
+								handler.messages_queue.push((id, msg));
 							}
 						}
-					}
-					Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
-					Err(e) => log::error!("{e}"),
-				}
+						Err(tungstenite::Error::AlreadyClosed | tungstenite::Error::ConnectionClosed) => break,
+						Err(tungstenite::Error::Io(err)) => {
+							let err = err.kind();
+							if !matches!(err, io::ErrorKind::WouldBlock) {
+								log::error!("{err}");
+							}
+						}
+						_ => {}
+					};
 
-				handshake(&mut handler);
+					match receiver.recv_timeout(timeout) {
+						Ok(InternalMessage::SendMessage { receiver_id, message }) => {
+							if receiver_id == id {
+								let message = message.serialize_json();
+								if let Err(e) = websocket.send(tungstenite::Message::text(message)) {
+									log::error!("{e}");
+								}
+							}
+						}
+						Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
+						Err(e) => log::error!("{e}"),
+					}
+
+					handshake(&mut handler);
+				}
+				{
+					let mut clients = handler.clients.write().unwrap();
+					clients.remove(&id);
+				}
 			});
 		}
 	}

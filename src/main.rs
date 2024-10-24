@@ -21,6 +21,9 @@ fn main() {
 				Message::SendMessage { channel, content } => {
 					let author = id;
 					for id in handler.get_clients() {
+						if id == author {
+							continue;
+						}
 						let channel = channel.clone();
 						let content = content.clone();
 						handler.send(id, Message::ReceiveMessage { author, channel, content }).unwrap();
