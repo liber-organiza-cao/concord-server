@@ -18,6 +18,7 @@ pub struct Server<T: nanoserde::DeJson + nanoserde::SerJson, const TIMEOUT_IN_MI
 impl<T: nanoserde::DeJson + nanoserde::SerJson, const TIMEOUT_IN_MILLIS: u64> Server<T, TIMEOUT_IN_MILLIS> {
 	pub fn bind<A: net::ToSocketAddrs>(addr: A) -> error::Result<Self> {
 		let listener = net::TcpListener::bind(addr)?;
+		listener.set_nonblocking(true)?;
 		let clients = collections::HashMap::new();
 		let connected_queue = Vec::new();
 		let disconnected_queue = Vec::new();
@@ -34,11 +35,34 @@ impl<T: nanoserde::DeJson + nanoserde::SerJson, const TIMEOUT_IN_MILLIS: u64> Se
 	}
 	pub fn pull(&mut self) -> bool {
 		if let Ok((stream, _)) = self.listener.accept() {
-			if let Ok(socket) = tungstenite::accept(stream) {
-				self.clients.insert(self.id_counter, socket);
-				self.id_counter += 1;
+			if stream.set_nonblocking(true).is_ok() {
+				match tungstenite::accept(stream) {
+					Ok(socket) => {
+						let id = self.id_counter;
+						self.id_counter += 1;
+						self.connected_queue.push(id);
+						self.clients.insert(id, socket);
+					}
+					Err(tungstenite::HandshakeError::Interrupted(mut m)) => {
+						let websocket = loop {
+							match m.handshake() {
+								Ok(t) => break Ok(t),
+								Err(tungstenite::HandshakeError::Interrupted(md)) => m = md,
+								Err(e) => break Err(e),
+							}
+						};
+						if let Ok(socket) = websocket {
+							let id = self.id_counter;
+							self.id_counter += 1;
+							self.connected_queue.push(id);
+							self.clients.insert(id, socket);
+						}
+					}
+					Err(e) => log::info!("{e}"),
+				}
 			}
 		}
+
 		for (id, socket) in &mut self.clients {
 			match socket.read() {
 				Ok(tungstenite::Message::Text(msg)) => match T::deserialize_json(&msg) {
