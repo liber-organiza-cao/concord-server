@@ -22,13 +22,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ DOCKERHUB_REPOSITORY }}
+          images: ${DOCKERHUB_REPOSITORY}
         
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
-          username: ${{ DOCKERHUB_USERNAME }}
-          password: ${{ DOCKERHUB_TOKEN }}
+          username: ${DOCKERHUB_USERNAME}
+          password: ${DOCKERHUB_TOKEN}
       
       - name: Build and push
         uses: docker/build-push-action@v5
