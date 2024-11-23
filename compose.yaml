@@ -1,0 +1,10 @@
+services:
+  concord:
+    image: concord-server
+    container_name: concord-server
+    restart: unless-stopped
+    environment:
+      PORT: 6464
+      ADDRESS: "0.0.0.0"
+    volumes:
+      - ./data/concord:/data
