@@ -1,0 +1,7 @@
+services:
+  concord:
+    image: heraclitoqsaldanha/concord-server
+    container_name: concord-server
+    restart: unless-stopped
+    ports:
+      - "6464:6464"
