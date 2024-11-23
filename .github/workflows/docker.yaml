@@ -6,11 +6,6 @@ on:
   pull_request:
     branches: [ "docker" ]
 
-env:
-  DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_REPOSITORY }}
-  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-
 jobs:
   docker:
     runs-on: ubuntu-latest
@@ -23,13 +18,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${DOCKERHUB_REPOSITORY}
+          images: ${{ secrets.DOCKERHUB_REPOSITORY }}
         
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
-          username: ${DOCKERHUB_USERNAME}
-          password: ${DOCKERHUB_TOKEN}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
       
       - name: Build and push
         uses: docker/build-push-action@v5
