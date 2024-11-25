@@ -8,6 +8,8 @@ pub enum Message {
 	SendMessage { channel: String, content: String },
 	ReceiveMessage { author: u64, channel: String, content: String },
 	Connected { id: u64 },
+	Disconnected { id: u64 },
+	ChangeStatus { author: u64, afk: bool },
 }
 
 fn main() {
@@ -22,17 +24,29 @@ fn main() {
 			let _ = server.send(id, Message::Connected { id });
 			log::info!("{id} connected");
 		}
-		if let Some(id) = server.on_disconnected() {
-			log::info!("{id} disconnected");
+		if let Some(disconnected_id) = server.on_disconnected() {
+			log::info!("{disconnected_id} disconnected");
+
+			for id in server.get_clients() {
+				let _ = server.send(id, Message::Disconnected { id: disconnected_id });
+			}
 		}
 		if let Some((id, msg)) = server.on_message() {
-			if let Message::SendMessage { channel, content } = msg {
-				let author = id;
-				for id in server.get_clients() {
-					let channel = channel.clone();
-					let content = content.clone();
-					let _ = server.send(id, Message::ReceiveMessage { author, channel, content });
+			match msg {
+				Message::SendMessage { channel, content } => {
+					let author = id;
+					for id in server.get_clients() {
+						let channel = channel.clone();
+						let content = content.clone();
+						let _ = server.send(id, Message::ReceiveMessage { author, channel, content });
+					}
 				}
+				Message::ChangeStatus { author, afk } => {
+					for id in server.get_clients() {
+						let _ = server.send(id, Message::ChangeStatus { author, afk });
+					}
+				}
+				_ => {}
 			}
 		}
 	}
