@@ -6,7 +6,7 @@ use crate::*;
 
 type WebSocket = tungstenite::WebSocket<net::TcpStream>;
 
-pub struct Server<T: nanoserde::DeJson + nanoserde::SerJson, const TIMEOUT_IN_MILLIS: u64> {
+pub struct Server<T: serde::de::DeserializeOwned + serde::ser::Serialize, const TIMEOUT_IN_MILLIS: u64> {
 	listener: net::TcpListener,
 	clients: collections::HashMap<u64, WebSocket>,
 	message_queue: Vec<(u64, T)>,
@@ -15,7 +15,7 @@ pub struct Server<T: nanoserde::DeJson + nanoserde::SerJson, const TIMEOUT_IN_MI
 	id_counter: u64,
 }
 
-impl<T: nanoserde::DeJson + nanoserde::SerJson, const TIMEOUT_IN_MILLIS: u64> Server<T, TIMEOUT_IN_MILLIS> {
+impl<T: serde::de::DeserializeOwned + serde::ser::Serialize, const TIMEOUT_IN_MILLIS: u64> Server<T, TIMEOUT_IN_MILLIS> {
 	pub fn bind<A: net::ToSocketAddrs>(addr: A) -> error::Result<Self> {
 		let listener = net::TcpListener::bind(addr)?;
 		listener.set_nonblocking(true)?;
@@ -65,10 +65,13 @@ impl<T: nanoserde::DeJson + nanoserde::SerJson, const TIMEOUT_IN_MILLIS: u64> Se
 
 		for (id, socket) in &mut self.clients {
 			match socket.read() {
-				Ok(tungstenite::Message::Text(msg)) => match T::deserialize_json(&msg) {
-					Ok(t) => self.message_queue.push((*id, t)),
-					Err(e) => log::error!("{e}"),
-				},
+				Ok(tungstenite::Message::Text(msg)) => {
+					//println!("{msg}");
+					match serde_json::from_str::<T>(&msg) {
+						Ok(t) => self.message_queue.push((*id, t)),
+						Err(e) => log::error!("{e}"),
+					}
+				}
 				Err(tungstenite::Error::Io(io)) => {
 					let kind = io.kind();
 					if !matches!(kind, io::ErrorKind::WouldBlock) {
@@ -98,7 +101,7 @@ impl<T: nanoserde::DeJson + nanoserde::SerJson, const TIMEOUT_IN_MILLIS: u64> Se
 	}
 	pub fn send(&mut self, id: u64, msg: T) -> error::Result<()> {
 		if let Some(socket) = self.clients.get_mut(&id) {
-			let message = tungstenite::Message::Text(msg.serialize_json());
+			let message = tungstenite::Message::Text(serde_json::to_string(&msg).unwrap());
 			socket.send(message)?;
 		}
 		return Err(error::Error::ClientNotFound);
