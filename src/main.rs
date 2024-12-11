@@ -2,7 +2,6 @@ mod error;
 mod server;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-
 pub enum Message {
 	SendMessage {
 		channel: String,
@@ -15,6 +14,13 @@ pub enum Message {
 	},
 	Connected {
 		id: u64,
+	},
+	Disconnected {
+		id: u64,
+	},
+	ChangeStatus {
+		author: u64,
+		afk: bool,
 	},
 	Offer {
 		r#type: String,
@@ -44,8 +50,12 @@ fn main() {
 			let _ = server.send(id, Message::Connected { id });
 			log::info!("{id} connected");
 		}
-		if let Some(id) = server.on_disconnected() {
-			log::info!("{id} disconnected");
+		if let Some(disconnected_id) = server.on_disconnected() {
+			log::info!("{disconnected_id} disconnected");
+
+			for id in server.get_clients() {
+				let _ = server.send(id, Message::Disconnected { id: disconnected_id });
+			}
 		}
 		if let Some((id, msg)) = server.on_message() {
 			match msg {
@@ -55,6 +65,11 @@ fn main() {
 						let channel = channel.clone();
 						let content = content.clone();
 						let _ = server.send(id, Message::ReceiveMessage { author, channel, content });
+					}
+				}
+				Message::ChangeStatus { author, afk } => {
+					for id in server.get_clients() {
+						let _ = server.send(id, Message::ChangeStatus { author, afk });
 					}
 				}
 				Message::Offer { r#type, sdp } => {
