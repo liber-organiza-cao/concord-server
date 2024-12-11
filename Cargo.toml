@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 tungstenite = "0.24.0"
-nanoserde = "0.1.37"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 log = "0.4.22"
 simple_logger = "5.0.0"
 crossbeam-channel = "0.5"
