@@ -1,15 +1,41 @@
-use nanoserde::{DeJson, SerJson};
-
 mod error;
 mod server;
 
-#[derive(Debug, Clone, PartialEq, Eq, DeJson, SerJson)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum Message {
-	SendMessage { channel: String, content: String },
-	ReceiveMessage { author: u64, channel: String, content: String },
-	Connected { id: u64 },
-	Disconnected { id: u64 },
-	ChangeStatus { author: u64, afk: bool },
+	SendMessage {
+		channel: String,
+		content: String,
+	},
+	ReceiveMessage {
+		author: u64,
+		channel: String,
+		content: String,
+	},
+	Connected {
+		id: u64,
+	},
+	Disconnected {
+		id: u64,
+	},
+	ChangeStatus {
+		author: u64,
+		afk: bool,
+	},
+	Offer {
+		r#type: String,
+		sdp: String,
+	},
+	Answer {
+		r#type: String,
+		sdp: String,
+	},
+	Candidate {
+		candidate: Option<String>,
+		sdpMLineIndex: Option<i64>,
+		sdpMid: Option<String>,
+		usernameFragment: Option<String>,
+	},
 }
 
 fn main() {
@@ -44,6 +70,54 @@ fn main() {
 				Message::ChangeStatus { author, afk } => {
 					for id in server.get_clients() {
 						let _ = server.send(id, Message::ChangeStatus { author, afk });
+					}
+				}
+				Message::Offer { r#type, sdp } => {
+					let author = id;
+					for id in server.get_clients() {
+						if author == id {
+							continue;
+						}
+						let r#type = r#type.clone();
+						let sdp = sdp.clone();
+						let _ = server.send(id, Message::Offer { r#type, sdp });
+					}
+				}
+				Message::Candidate {
+					candidate,
+					sdpMLineIndex,
+					sdpMid,
+					usernameFragment,
+				} => {
+					let author = id;
+					for id in server.get_clients() {
+						if author == id {
+							continue;
+						}
+						let candidate = candidate.clone();
+						let sdpMLineIndex = sdpMLineIndex.clone();
+						let sdpMid = sdpMid.clone();
+						let usernameFragment = usernameFragment.clone();
+						let _ = server.send(
+							id,
+							Message::Candidate {
+								candidate,
+								sdpMLineIndex,
+								sdpMid,
+								usernameFragment,
+							},
+						);
+					}
+				}
+				Message::Answer { r#type, sdp } => {
+					let author = id;
+					for id in server.get_clients() {
+						if author == id {
+							continue;
+						}
+						let r#type = r#type.clone();
+						let sdp = sdp.clone();
+						let _ = server.send(id, Message::Answer { r#type, sdp });
 					}
 				}
 				_ => {}
