@@ -5,8 +5,10 @@ mod server;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum Message {
+	SetPubkey { pubkey: String },
+	PubkeySet { id: u64, pubkey: String },
 	SendMessage { channel: String, content: String },
-	ReceiveMessage { author: u64, channel: String, content: String },
+	MessageSent { author: String, channel: String, content: String },
 	Connected { id: u64 },
 	Disconnected { id: u64 },
 	ChangeStatus { author: u64, afk: bool },
@@ -47,6 +49,7 @@ fn main() {
 
 	let mut server = server::Server::<Message, 5>::bind("0.0.0.0:6464").unwrap();
 	let mut voice_channel_peers = collections::HashMap::<String, Vec<u64>>::new();
+	let mut conn_id_to_pubkey = collections::HashMap::<u64, String>::new();
 
 	while server.pull() {
 		if let Some(id) = server.on_connected() {
@@ -57,6 +60,17 @@ fn main() {
 					let _ = server.send(id, Message::JoinedVoiceChannel { channel, id: *peer_id });
 				}
 			}
+
+			for (conn_id, pubkey) in &conn_id_to_pubkey {
+				let _ = server.send(
+					id,
+					Message::PubkeySet {
+						id: *conn_id,
+						pubkey: pubkey.clone(),
+					},
+				);
+			}
+
 			log::info!("{id} connected");
 		}
 		if let Some(disconnected_id) = server.on_disconnected() {
@@ -88,11 +102,19 @@ fn main() {
 		if let Some((id, msg)) = server.on_message() {
 			match msg {
 				Message::SendMessage { channel, content } => {
-					let author = id;
+					let Some(author) = conn_id_to_pubkey.get(&id) else {
+						continue;
+					};
+
 					for id in server.get_clients() {
-						let channel = channel.clone();
-						let content = content.clone();
-						let _ = server.send(id, Message::ReceiveMessage { author, channel, content });
+						let _ = server.send(
+							id,
+							Message::MessageSent {
+								author: author.clone(),
+								channel: channel.clone(),
+								content: content.clone(),
+							},
+						);
 					}
 				}
 				Message::ChangeStatus { author, afk } => {
@@ -131,6 +153,13 @@ fn main() {
 					for peer_id in server.get_clients() {
 						let channel = channel.clone();
 						let _ = server.send(peer_id, Message::LeftVoiceChannel { channel, id });
+					}
+				}
+				Message::SetPubkey { pubkey } => {
+					conn_id_to_pubkey.insert(id, pubkey.clone());
+
+					for client in server.get_clients() {
+						let _ = server.send(client, Message::PubkeySet { id, pubkey: pubkey.clone() });
 					}
 				}
 				_ => {}
