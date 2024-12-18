@@ -4,7 +4,7 @@ use std::net;
 
 use crate::*;
 
-type WebSocket = tungstenite::WebSocket<net::TcpStream>;
+type WebSocket = tokio_tungstenite::tungstenite::WebSocket<net::TcpStream>;
 
 pub struct Server<T: serde::de::DeserializeOwned + serde::ser::Serialize, const TIMEOUT_IN_MILLIS: u64> {
 	listener: net::TcpListener,
@@ -36,18 +36,18 @@ impl<T: serde::de::DeserializeOwned + serde::ser::Serialize, const TIMEOUT_IN_MI
 	pub fn pull(&mut self) -> bool {
 		if let Ok((stream, _)) = self.listener.accept() {
 			if stream.set_nonblocking(true).is_ok() {
-				match tungstenite::accept(stream) {
+				match tokio_tungstenite::tungstenite::accept(stream) {
 					Ok(socket) => {
 						let id = self.id_counter;
 						self.id_counter += 1;
 						self.connected_queue.push(id);
 						self.clients.insert(id, socket);
 					}
-					Err(tungstenite::HandshakeError::Interrupted(mut m)) => {
+					Err(tokio_tungstenite::tungstenite::HandshakeError::Interrupted(mut m)) => {
 						let websocket = loop {
 							match m.handshake() {
 								Ok(t) => break Ok(t),
-								Err(tungstenite::HandshakeError::Interrupted(md)) => m = md,
+								Err(tokio_tungstenite::tungstenite::HandshakeError::Interrupted(md)) => m = md,
 								Err(e) => break Err(e),
 							}
 						};
@@ -65,17 +65,17 @@ impl<T: serde::de::DeserializeOwned + serde::ser::Serialize, const TIMEOUT_IN_MI
 
 		for (id, socket) in &mut self.clients {
 			match socket.read() {
-				Ok(tungstenite::Message::Text(msg)) => match serde_json::from_str::<T>(&msg) {
+				Ok(tokio_tungstenite::tungstenite::Message::Text(msg)) => match serde_json::from_str::<T>(&msg) {
 					Ok(t) => self.message_queue.push((*id, t)),
 					Err(e) => log::error!("{e}"),
 				},
-				Err(tungstenite::Error::Io(io)) => {
+				Err(tokio_tungstenite::tungstenite::Error::Io(io)) => {
 					let kind = io.kind();
 					if !matches!(kind, io::ErrorKind::WouldBlock) {
 						log::error!("{kind}");
 					}
 				}
-				Err(tungstenite::Error::AlreadyClosed | tungstenite::Error::ConnectionClosed) => {
+				Err(tokio_tungstenite::tungstenite::Error::AlreadyClosed | tokio_tungstenite::tungstenite::Error::ConnectionClosed) => {
 					self.disconnected_queue.push(*id);
 				}
 				Err(e) => log::error!("{e}"),
@@ -98,7 +98,7 @@ impl<T: serde::de::DeserializeOwned + serde::ser::Serialize, const TIMEOUT_IN_MI
 	}
 	pub fn send(&mut self, id: u64, msg: T) -> error::Result<()> {
 		if let Some(socket) = self.clients.get_mut(&id) {
-			let message = tungstenite::Message::Text(serde_json::to_string(&msg).unwrap());
+			let message = tokio_tungstenite::tungstenite::Message::Text(serde_json::to_string(&msg).unwrap());
 			socket.send(message)?;
 		}
 		return Err(error::Error::ClientNotFound);

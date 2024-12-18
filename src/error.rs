@@ -16,9 +16,9 @@ impl From<io::Error> for Error {
 	}
 }
 
-impl From<tungstenite::Error> for Error {
+impl From<tokio_tungstenite::tungstenite::Error> for Error {
 	#[inline(always)]
-	fn from(_: tungstenite::Error) -> Self {
+	fn from(_: tokio_tungstenite::tungstenite::Error) -> Self {
 		Self::Tungstenite
 	}
 }

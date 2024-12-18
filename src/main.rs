@@ -44,7 +44,8 @@ struct Candidate {
 	username_fragment: Option<String>,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
 	#[cfg(not(debug_assertions))]
 	simple_logger::init_with_level(log::Level::Info).unwrap();
 	#[cfg(debug_assertions)]
